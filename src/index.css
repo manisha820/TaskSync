@@ -1,0 +1,54 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-primary: #4343d5;
+  --color-primary-hover: #3737b5;
+  --color-secondary: #4e45d5;
+  --color-tertiary: #904400;
+  
+  --color-surface: #f7f9fb;
+  --color-surface-dim: #d8dadc;
+  --color-surface-bright: #f7f9fb;
+  --color-surface-glass: rgba(255, 255, 255, 0.7);
+  
+  --color-sidebar: #5d5fef;
+  --color-sidebar-dark: #4a4bd1;
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-slate-900 font-sans antialiased;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-surface-glass backdrop-blur-xl border border-white/40 shadow-sm transition-all duration-300;
+  }
+  
+  .sidebar-gradient {
+    background: linear-gradient(180deg, var(--color-sidebar) 0%, var(--color-sidebar-dark) 100%);
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-3 text-white/70 hover:text-white transition-all duration-200 rounded-xl hover:bg-white/10;
+  }
+
+  .nav-item-active {
+    @apply flex items-center gap-3 px-4 py-3 bg-white/20 text-white font-semibold rounded-xl;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 rounded-full hover:bg-slate-300;
+}
