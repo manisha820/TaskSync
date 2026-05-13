@@ -13,6 +13,44 @@ export function FocusTimer() {
   const [loading, setLoading] = useState(false);
   const startTimeRef = useRef<number | null>(null);
 
+  const [activeSound, setActiveSound] = useState<string | null>(null);
+  const [volume, setVolume] = useState(0.5);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const sounds = [
+    { id: 'rain', name: 'Rain Forest', icon: CloudRain, url: 'https://actions.google.com/sounds/v1/weather/rain_heavy_loud.ogg' },
+    { id: 'lofi', name: 'Lo-Fi Beats', icon: Music, url: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf7f5.mp3' },
+    { id: 'noise', name: 'White Noise', icon: Wind, url: 'https://actions.google.com/sounds/v1/water/waves_crashing_on_rock_beach.ogg' },
+  ];
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    
+    if (activeSound) {
+      const sound = sounds.find(s => s.id === activeSound);
+      if (sound) {
+        audioRef.current = new Audio(sound.url);
+        audioRef.current.loop = true;
+        audioRef.current.volume = volume;
+        audioRef.current.play().catch(e => console.log('Audio play failed:', e));
+      }
+    }
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, [activeSound]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+    }
+  }, [volume]);
+
   useEffect(() => {
     let interval: any = null;
     if (isActive && timeLeft > 0) {
@@ -226,30 +264,41 @@ export function FocusTimer() {
         <div className="glass-card p-8 rounded-none">
           <h4 className="text-xl font-bold text-text-primary mb-6">Focus Sounds</h4>
           <div className="space-y-4">
-            {[
-              { name: 'Rain Forest', icon: CloudRain, active: true, val: 65 },
-              { name: 'Lo-Fi Beats', icon: Music, active: false },
-              { name: 'White Noise', icon: Wind, active: false },
-            ].map((sound, i) => (
-              <div key={i} className={cn(
-                "p-5 rounded-none border transition-all flex items-center justify-between group cursor-pointer",
-                sound.active ? "bg-surface-bright border-primary/20 shadow-sm" : "hover:bg-surface-bright border-transparent"
-              )}>
-                <div className="flex items-center gap-4">
-                  <sound.icon size={20} className={sound.active ? "text-primary" : "text-text-muted"} />
-                  <span className={cn("font-bold text-sm", sound.active ? "text-text-primary" : "text-text-muted")}>{sound.name}</span>
-                </div>
-                {sound.active ? (
-                  <div className="flex items-center gap-3">
-                    <div className="w-24 h-1.5 bg-surface-dim rounded-none">
-                      <div className="h-full bg-primary rounded-none" style={{ width: `${sound.val}%` }} />
-                    </div>
+            {sounds.map((sound) => {
+              const isActive = activeSound === sound.id;
+              return (
+                <div 
+                  key={sound.id} 
+                  onClick={() => setActiveSound(isActive ? null : sound.id)}
+                  className={cn(
+                    "p-5 rounded-none border transition-all flex items-center justify-between group cursor-pointer",
+                    isActive ? "bg-surface-bright border-primary/20 shadow-sm" : "hover:bg-surface-bright border-transparent"
+                  )}
+                >
+                  <div className="flex items-center gap-4">
+                    <sound.icon size={20} className={isActive ? "text-primary" : "text-text-muted"} />
+                    <span className={cn("font-bold text-sm", isActive ? "text-text-primary" : "text-text-muted")}>{sound.name}</span>
                   </div>
-                ) : (
-                  <Play size={20} className="text-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                )}
-              </div>
-            ))}
+                  {isActive ? (
+                    <div className="flex items-center gap-3 w-32" onClick={(e) => e.stopPropagation()}>
+                      <Wind size={14} className="text-text-muted" />
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max="1" 
+                        step="0.05"
+                        value={volume}
+                        onChange={(e) => setVolume(parseFloat(e.target.value))}
+                        className="w-full h-1.5 bg-surface-dim rounded-none appearance-none cursor-pointer accent-primary"
+                        title="Volume"
+                      />
+                    </div>
+                  ) : (
+                    <Play size={20} className="text-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
