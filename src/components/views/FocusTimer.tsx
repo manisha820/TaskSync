@@ -19,7 +19,7 @@ export function FocusTimer() {
 
   const sounds = [
     { id: 'rain', name: 'Rain Forest', icon: CloudRain, url: 'https://actions.google.com/sounds/v1/weather/rain_heavy_loud.ogg' },
-    { id: 'lofi', name: 'Lo-Fi Beats', icon: Music, url: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf7f5.mp3' },
+    { id: 'lofi', name: 'Lo-Fi Beats', icon: Music, url: 'https://cdn.freesound.org/previews/538/538556_8812613-lq.mp3' },
     { id: 'noise', name: 'White Noise', icon: Wind, url: 'https://actions.google.com/sounds/v1/water/waves_crashing_on_rock_beach.ogg' },
   ];
 
