@@ -55,6 +55,20 @@ export function CalendarView({ selectedDate, onSelectDate, openModal }: Calendar
     if (!user) return;
     loadAll();
 
+    // Auto-sync Google Calendar once on mount if we haven't already
+    const autoSync = async () => {
+      try {
+        const { syncGoogleCalendar } = await import('../../lib/api/sync');
+        const success = await syncGoogleCalendar(user.id);
+        if (success) {
+          loadAll(); // Reload if new events were pulled
+        }
+      } catch (err) {
+        console.warn('Auto-sync failed:', err);
+      }
+    };
+    autoSync();
+
     const ch = supabase.channel('calendar-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` }, loadAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_events', filter: `user_id=eq.${user.id}` }, loadAll)
@@ -117,6 +131,27 @@ export function CalendarView({ selectedDate, onSelectDate, openModal }: Calendar
     setPanelDate(date);
   };
 
+  const [isSyncing, setIsSyncing] = useState(false);
+  const handleSync = async () => {
+    if (!user) return;
+    setIsSyncing(true);
+    try {
+      const { syncGoogleCalendar } = await import('../../lib/api/sync');
+      const success = await syncGoogleCalendar(user.id);
+      if (success) {
+        await loadAll(); // reload data after sync
+        alert('Calendar synced successfully!');
+      } else {
+        alert('Failed to sync. Make sure you are signed in with Google and have granted Calendar permissions.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('An error occurred during sync.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <div className="space-y-8 pb-20">
       <div className="flex items-center justify-between">
@@ -131,12 +166,22 @@ export function CalendarView({ selectedDate, onSelectDate, openModal }: Calendar
             <ChevronRight size={20} />
           </button>
         </div>
-        <button
-          onClick={() => setViewMonth(new Date(today.getFullYear(), today.getMonth(), 1))}
-          className="text-xs font-black uppercase tracking-widest text-primary hover:underline"
-        >
-          Today
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setViewMonth(new Date(today.getFullYear(), today.getMonth(), 1))}
+            className="text-xs font-black uppercase tracking-widest text-text-muted hover:text-text-primary"
+          >
+            Today
+          </button>
+          <button
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary bg-primary/10 px-3 py-1.5 hover:bg-primary/20 transition-all rounded-none disabled:opacity-50"
+          >
+            {isSyncing ? <Loader2 size={12} className="animate-spin" /> : <CalIcon size={12} />}
+            {isSyncing ? 'Syncing...' : 'Sync Google Calendar'}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
