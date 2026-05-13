@@ -25,10 +25,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Listen for changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
+
+      // Handle user profile creation for OAuth (like Google)
+      if (event === 'SIGNED_IN' && session?.user) {
+        const { user: authUser } = session;
+        await supabase.from('users').upsert({
+          id: authUser.id,
+          email: authUser.email,
+          full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || 'User',
+          avatar_url: authUser.user_metadata?.avatar_url || null,
+          created_at: authUser.created_at || new Date().toISOString()
+        }, { onConflict: 'id' }).catch(err => console.error('Error syncing OAuth user:', err));
+      }
     });
 
     return () => subscription.unsubscribe();
