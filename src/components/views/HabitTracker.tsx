@@ -1,196 +1,284 @@
-import { Bolt, BarChart2, CheckCircle, Trophy, ArrowRight, Zap, Target, Droplets, BookOpen, Rocket } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
+import React, { useState, useEffect } from 'react';
+import { Trophy, ArrowRight, Plus, Check, X, Flame, Target, BarChart2, Loader2, RefreshCw } from 'lucide-react';
+import { cn } from '../../lib/utils';
+import { useAuth } from '../auth/AuthProvider';
+import { fetchHabits, fetchHabitLogs, logHabit, removeHabitLog, Habit, HabitLog } from '../../lib/api/habits';
+import { supabase } from '../../lib/supabase';
 
-export function HabitTracker() {
+interface HabitTrackerProps {
+  openModal?: (tab: 'task' | 'note' | 'habit' | 'event') => void;
+}
+
+function toDateString(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function HabitTracker({ openModal }: HabitTrackerProps) {
+  const { user } = useAuth();
+  const [habits, setHabits] = useState<Habit[]>([]);
+  const [logs, setLogs] = useState<HabitLog[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingHabitId, setLoadingHabitId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      loadData();
+      const channel = supabase.channel('habits-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'habits', filter: `user_id=eq.${user.id}` }, loadData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'habit_logs', filter: `user_id=eq.${user.id}` }, loadData)
+        .subscribe();
+      return () => { supabase.removeChannel(channel); };
+    }
+  }, [user]);
+
+  const loadData = async () => {
+    if (!user) return;
+    setIsLoading(true);
+    const [fetchedHabits, fetchedLogs] = await Promise.all([
+      fetchHabits(user.id),
+      fetchHabitLogs(user.id)
+    ]);
+    setHabits(fetchedHabits);
+    setLogs(fetchedLogs);
+    setIsLoading(false);
+  };
+
+  const handleToggle = async (habitId: string, dateStr: string, currentStatus: string | null) => {
+    if (!user) return;
+    setLoadingHabitId(`${habitId}-${dateStr}`);
+    
+    try {
+      if (currentStatus === 'done') {
+        // Optimistic
+        setLogs(logs.filter(l => !(l.habit_id === habitId && l.completed_date === dateStr)));
+        await removeHabitLog(habitId, dateStr);
+      } else {
+        // Optimistic
+        const newStatus = 'done';
+        const optimisticLog: HabitLog = {
+          id: 'temp-' + Date.now(),
+          habit_id: habitId,
+          user_id: user.id,
+          completed_date: dateStr,
+          status: newStatus,
+          completed_at: new Date().toISOString()
+        };
+        // Remove existing for this date if any
+        const cleanLogs = logs.filter(l => !(l.habit_id === habitId && l.completed_date === dateStr));
+        setLogs([...cleanLogs, optimisticLog]);
+        
+        await logHabit(habitId, user.id, dateStr, newStatus);
+      }
+    } finally {
+      setLoadingHabitId(null);
+    }
+  };
+
+  const getLogStatus = (habitId: string, dateStr: string) => {
+    const log = logs.find(l => l.habit_id === habitId && l.completed_date === dateStr);
+    return log ? log.status : null;
+  };
+
+  const calculateStreaks = (habitId: string) => {
+    const habitLogs = logs
+      .filter(l => l.habit_id === habitId && l.status === 'done')
+      .map(l => new Date(l.completed_date).getTime())
+      .sort((a, b) => a - b);
+    
+    if (habitLogs.length === 0) return { current: 0, best: 0, percentage: 0 };
+
+    let current = 0;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    let checkDate = new Date(today);
+    while (true) {
+      if (habitLogs.includes(checkDate.getTime())) {
+        current++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        if (current === 0 && checkDate.getTime() === today.getTime()) {
+           checkDate.setDate(checkDate.getDate() - 1);
+           continue;
+        }
+        break;
+      }
+    }
+
+    let best = current;
+    let tempStreak = 1;
+    for (let i = 1; i < habitLogs.length; i++) {
+       const diff = (habitLogs[i] - habitLogs[i-1]) / (1000 * 60 * 60 * 24);
+       if (diff === 1) {
+         tempStreak++;
+         best = Math.max(best, tempStreak);
+       } else {
+         tempStreak = 1;
+       }
+    }
+
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    const recentLogs = habitLogs.filter(t => t >= thirtyDaysAgo.getTime()).length;
+    const percentage = Math.round((recentLogs / 30) * 100);
+
+    return { current, best, percentage };
+  };
+
+  // Last 7 days
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return d;
+  });
+
   return (
     <div className="space-y-10">
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          { label: 'Longest Streak', value: '42', unit: 'days', icon: Bolt, color: 'text-primary', bg: 'bg-primary/10', trend: '+12% vs LY' },
-          { label: 'Consistency Rate', value: '94', unit: '%', icon: BarChart2, color: 'text-secondary', bg: 'bg-secondary/10', trend: 'Top 5%' },
-          { label: 'Habits Done', value: '6/8', unit: '', icon: CheckCircle, color: 'text-orange-600', bg: 'bg-orange-50', trend: 'Today' },
-          { label: 'Total Rewards', value: '12', unit: 'badges', icon: Trophy, color: 'text-blue-600', bg: 'bg-blue-50', trend: 'Level 14' },
-        ].map((stat, i) => (
-          <div key={i} className="glass-card p-6 rounded-3xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className={cn("p-2 rounded-xl", stat.bg)}>
-                <stat.icon size={20} className={stat.color} />
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{stat.trend}</span>
-            </div>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">{stat.label}</p>
-            <h3 className="text-4xl font-black text-slate-800">
-              {stat.value} <span className="text-lg font-bold text-slate-400">{stat.unit}</span>
-            </h3>
+      {/* Top Banner */}
+      <div className="glass-card p-10 flex flex-col md:flex-row items-center justify-between gap-8 border border-white/5 rounded-none">
+        <div>
+          <h2 className="text-3xl font-black text-text-primary tracking-tight mb-2">Build Consistency</h2>
+          <p className="text-text-muted font-medium max-w-xl">
+            Track your daily routines, analyze your streaks, and optimize your productivity through automated insights.
+          </p>
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="text-center px-6 border-r border-white/10">
+            <h3 className="text-4xl font-black text-primary">{habits.length}</h3>
+            <p className="text-[10px] font-black uppercase tracking-widest text-text-muted mt-1">Active Habits</p>
           </div>
-        ))}
+          <div className="text-center px-6">
+            <h3 className="text-4xl font-black text-emerald-400">
+              {logs.filter(l => l.completed_date === toDateString(new Date()) && l.status === 'done').length}
+            </h3>
+            <p className="text-[10px] font-black uppercase tracking-widest text-text-muted mt-1">Done Today</p>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-8">
-        {/* Habit List */}
-        <div className="col-span-12 lg:col-span-8 space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl font-bold text-slate-800">Active Habits</h3>
-            <button className="text-primary font-bold text-sm flex items-center gap-2 hover:underline">
-              Manage All <ArrowRight size={16} />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {[
-              { name: 'Morning Meditation', schedule: '15 mins daily • Morning', streak: '14 Days', active: true, icon: Zap },
-              { name: 'Deep Work', schedule: '4 hours blocks • Workday', streak: '8 Days', active: false, icon: Target },
-              { name: 'Hydration', schedule: '3L Water • Daily', streak: '31 Days', active: true, icon: Droplets },
-              { name: 'Read 20 Pages', schedule: 'Science/Non-fiction • Evening', streak: '5 Days', active: false, icon: BookOpen },
-            ].map((habit, i) => (
-              <div key={i} className="glass-card p-6 rounded-[2rem] group hover:border-primary/30 cursor-pointer">
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <h4 className="font-bold text-lg text-slate-800 group-hover:text-primary transition-colors">{habit.name}</h4>
-                    <p className="text-slate-400 text-xs font-medium">{habit.schedule}</p>
-                  </div>
-                  <div className={cn(
-                    "w-12 h-6 rounded-full relative transition-all duration-300",
-                    habit.active ? "bg-primary" : "bg-slate-200"
-                  )}>
-                    <div className={cn(
-                      "absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm",
-                      habit.active ? "left-7" : "left-1"
-                    )} />
-                  </div>
-                </div>
-                <div className="flex items-end justify-between">
-                  <div>
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Current Streak</p>
-                    <p className="text-2xl font-black text-slate-800">{habit.streak}</p>
-                  </div>
-                  <div className="flex gap-1 items-end h-12">
-                    {[0.2, 0.4, 0.6, 1, 0.8, 0.5, 0.9].map((h, j) => (
-                      <div 
-                        key={j} 
-                        className={cn(
-                          "w-2 rounded-full transition-all",
-                          habit.active ? "bg-primary" : "bg-slate-200"
-                        )}
-                        style={{ height: `${h * 100}%` }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Heatmap */}
-          <div className="glass-card p-8 rounded-[2rem]">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="font-bold text-lg text-slate-800">Consistency Heatmap</h3>
-              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                <span>Less</span>
-                <div className="flex gap-1">
-                  {[0.1, 0.3, 0.5, 0.8, 1].map((o, i) => (
-                    <div key={i} className="w-3 h-3 rounded-sm bg-primary" style={{ opacity: o }} />
-                  ))}
-                </div>
-                <span>More</span>
-              </div>
-            </div>
-            <div className="grid grid-flow-col grid-rows-7 gap-1.5 overflow-x-auto pb-4 no-scrollbar">
-              {Array.from({ length: 364 }).map((_, i) => (
-                <div 
-                  key={i} 
-                  className="w-3 h-3 rounded-sm bg-primary" 
-                  style={{ opacity: Math.random() > 0.3 ? Math.random() : 0.05 }} 
-                />
-              ))}
-            </div>
-            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2">
-              {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map(m => (
-                <span key={m}>{m}</span>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Sidebar Widgets */}
-        <div className="col-span-12 lg:col-span-4 space-y-8">
-          <div className="glass-card p-8 rounded-[2rem]">
-            <h3 className="font-bold text-lg text-slate-800 mb-8">Weekly Performance</h3>
-            <div className="flex items-end justify-between h-48 px-2">
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, i) => {
-                const height = [60, 85, 40, 95, 70, 20, 10][i];
-                return (
-                  <div key={day} className="flex flex-col items-center gap-3 w-full group">
-                    <div className="w-full max-w-[32px] bg-slate-100 rounded-t-xl relative overflow-hidden h-40">
-                      <div 
-                        className={cn(
-                          "absolute bottom-0 w-full rounded-t-xl transition-all duration-500",
-                          i === 3 ? "bg-primary" : "bg-primary/20 group-hover:bg-primary/40"
-                        )}
-                        style={{ height: `${height}%` }}
-                      />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{day}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="glass-card p-8 rounded-[2rem]">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="font-bold text-lg text-slate-800">Achievements</h3>
-              <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">8 Locked</span>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { title: 'Consistency King', subtitle: '30 Day Streak', icon: Trophy, active: true },
-                { title: '14-Day Warrior', subtitle: 'Active Now', icon: Zap, active: true },
-                { title: 'Hydration Hero', subtitle: 'Lvl 5 Achieved', icon: Droplets, active: true },
-                { title: 'Early Bird', subtitle: 'Locked', icon: Rocket, active: false },
-              ].map((ach, i) => (
-                <div key={i} className={cn(
-                  "p-4 rounded-2xl border text-center transition-all hover:scale-105",
-                  ach.active ? "bg-slate-50 border-slate-100" : "bg-slate-100/50 border-transparent opacity-40 grayscale"
-                )}>
-                  <div className={cn("w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3", ach.active ? "bg-primary/10 text-primary" : "bg-slate-200 text-slate-400")}>
-                    <ach.icon size={24} />
-                  </div>
-                  <p className="text-xs font-bold text-slate-800 leading-tight">{ach.title}</p>
-                  <p className="text-[10px] text-slate-400 mt-1">{ach.subtitle}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Level Progress */}
-          <div className="bg-gradient-to-br from-primary to-indigo-700 p-8 rounded-[2rem] text-white overflow-hidden relative group">
-            <div className="relative z-10">
-              <h3 className="text-xl font-bold mb-6">Level 15 Goal</h3>
-              <div className="space-y-6">
-                {[
-                  { label: 'Morning Rituals', progress: 85 },
-                  { label: 'Deep Focus Blocks', progress: 42 },
-                ].map((item, i) => (
-                  <div key={i} className="space-y-2">
-                    <div className="flex justify-between text-[10px] font-black uppercase tracking-widest opacity-80">
-                      <span>{item.label}</span>
-                      <span>{item.progress}%</span>
-                    </div>
-                    <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
-                      <div className="h-full bg-white transition-all duration-1000" style={{ width: `${item.progress}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button className="w-full mt-10 py-3 bg-white text-primary font-black uppercase tracking-widest text-xs rounded-2xl shadow-xl hover:bg-slate-50 transition-all active:scale-95">
-                Claim 500 XP
+      {/* Main Habits View */}
+      <div>
+        <div className="flex items-center justify-between mb-8">
+          <h3 className="text-xl font-bold text-text-primary flex items-center gap-3">
+            <Target size={24} className="text-primary" /> Active Habits
+          </h3>
+          <div className="flex items-center gap-3">
+            {isLoading && <Loader2 size={16} className="animate-spin text-text-muted" />}
+            {openModal && (
+              <button
+                onClick={() => openModal('habit')}
+                className="flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-none text-xs font-black uppercase tracking-widest hover:bg-primary/20 transition-all"
+              >
+                <Plus size={14} /> Add Habit
               </button>
-            </div>
-            <Rocket className="absolute -bottom-10 -right-10 text-white/5 w-48 h-48 -rotate-12 transition-transform duration-700 group-hover:translate-x-4" />
+            )}
           </div>
         </div>
+
+        {habits.length === 0 ? (
+          <div className="p-16 text-center bg-surface-dim border border-dashed border-white/10 text-text-muted flex flex-col items-center gap-4 animate-in fade-in">
+            <Trophy size={48} className="opacity-20" />
+            <div>
+              <p className="font-bold text-lg text-text-primary mb-1">No habits configured</p>
+              <p className="text-sm opacity-80">Consistency starts with a single step. Create your first habit!</p>
+            </div>
+            {openModal && (
+              <button onClick={() => openModal('habit')} className="mt-4 btn-primary px-6 py-2">
+                Create Habit
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6">
+            {habits.map((habit) => {
+              const { current, best, percentage } = calculateStreaks(habit.id);
+              
+              return (
+                <div key={habit.id} className="glass-card border border-white/5 rounded-none p-6 flex flex-col lg:flex-row gap-8 transition-all hover:border-primary/20 hover:bg-surface-dim/40 group">
+                  {/* Habit Info */}
+                  <div className="w-full lg:w-64 shrink-0 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-white/5 pb-6 lg:pb-0 lg:pr-6">
+                    <div>
+                      <h4 className="text-xl font-black text-text-primary mb-1">{habit.name}</h4>
+                      <p className="text-xs font-bold uppercase tracking-widest text-text-muted">{habit.schedule}</p>
+                    </div>
+                    <div className="mt-6 flex items-center gap-4">
+                      <div className="flex items-center gap-1.5 text-orange-400">
+                        <Flame size={16} />
+                        <span className="font-bold text-sm">{current} Day Streak</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-text-muted">
+                        <Trophy size={14} />
+                        <span className="font-medium text-xs">Best: {best}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 7-Day Quick Toggles */}
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-text-muted mb-4">Last 7 Days</p>
+                    <div className="flex gap-2 w-full justify-between sm:justify-start sm:gap-4 overflow-x-auto pb-2">
+                      {last7Days.map(date => {
+                        const dateStr = toDateString(date);
+                        const status = getLogStatus(habit.id, dateStr);
+                        const isDone = status === 'done';
+                        const isMissed = status === 'missed';
+                        const isToday = toDateString(new Date()) === dateStr;
+                        const loading = loadingHabitId === `${habit.id}-${dateStr}`;
+
+                        return (
+                          <div key={dateStr} className="flex flex-col items-center gap-2">
+                            <span className={cn('text-[10px] font-bold uppercase', isToday ? 'text-primary' : 'text-text-muted')}>
+                              {date.toLocaleDateString('en-US', { weekday: 'short' })}
+                            </span>
+                            <button
+                              onClick={() => handleToggle(habit.id, dateStr, status)}
+                              disabled={loading}
+                              className={cn(
+                                'w-12 h-12 flex items-center justify-center transition-all duration-300 relative rounded-none',
+                                isDone ? 'bg-primary text-text-on-primary shadow-lg shadow-primary/20 scale-105' : 
+                                isMissed ? 'bg-red-500/20 text-red-400' :
+                                'bg-surface border border-white/5 text-text-muted hover:border-primary/40 hover:bg-surface-bright'
+                              )}
+                            >
+                              {loading ? (
+                                <RefreshCw size={18} className="animate-spin opacity-50" />
+                              ) : isDone ? (
+                                <Check size={20} className="animate-in zoom-in duration-200" />
+                              ) : isMissed ? (
+                                <X size={20} />
+                              ) : (
+                                <span className="opacity-0 group-hover:opacity-30 transition-opacity">
+                                  <Check size={20} />
+                                </span>
+                              )}
+                            </button>
+                            <span className="text-[10px] font-medium text-text-muted">
+                              {date.getDate()}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Monthly Consistency Heatmap Mini */}
+                  <div className="w-full lg:w-48 shrink-0 flex flex-col justify-center">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">30-Day Focus</span>
+                      <span className="text-xs font-bold text-primary">{percentage}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-surface-dim overflow-hidden rounded-none">
+                      <div className="h-full bg-primary transition-all duration-1000" style={{ width: `${percentage}%` }} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

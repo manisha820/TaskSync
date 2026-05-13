@@ -1,11 +1,17 @@
-import { useState, useEffect } from 'react';
-import { Play, RotateCcw, SkipForward, Maximize2, Sliders, Target, ChevronDown, Activity, CloudRain, Music, Wind, Flame, PenTool, Lock } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
+import { useState, useEffect, useRef } from 'react';
+import { Play, Pause, RotateCcw, SkipForward, Maximize2, Sliders, Target, ChevronDown, Activity, CloudRain, Music, Wind, Flame, PenTool, Lock, Loader2 } from 'lucide-react';
+import { cn } from '../../lib/utils';
+import { useAuth } from '../auth/AuthProvider';
+import { startWorkSession, endWorkSession } from '../../lib/api/sessions';
 
 export function FocusTimer() {
+  const { user } = useAuth();
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isActive, setIsActive] = useState(false);
   const [mode, setMode] = useState<'classic' | 'extended' | 'deep'>('classic');
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const startTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
     let interval: any = null;
@@ -13,12 +19,42 @@ export function FocusTimer() {
       interval = setInterval(() => {
         setTimeLeft((time) => time - 1);
       }, 1000);
-    } else if (timeLeft === 0) {
-      setIsActive(false);
-      clearInterval(interval);
+    } else if (timeLeft === 0 && isActive) {
+      handleSessionEnd();
     }
     return () => clearInterval(interval);
   }, [isActive, timeLeft]);
+
+  const handleSessionStart = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      setIsActive(true);
+      startTimeRef.current = Date.now();
+      const session = await startWorkSession(user.id);
+      if (session) {
+        setSessionId(session.id);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSessionEnd = async () => {
+    setIsActive(false);
+    if (sessionId && startTimeRef.current) {
+      setLoading(true);
+      try {
+        const durationMs = Date.now() - startTimeRef.current;
+        const durationMins = Math.floor(durationMs / 60000);
+        await endWorkSession(sessionId, durationMins);
+        setSessionId(null);
+        startTimeRef.current = null;
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -32,27 +68,27 @@ export function FocusTimer() {
     <div className="grid grid-cols-12 gap-8 h-full">
       <div className="col-span-12 lg:col-span-8 flex flex-col gap-8">
         {/* Task Selector */}
-        <div className="glass-card p-6 rounded-[2rem] flex items-center justify-between">
+        <div className="glass-card p-6 rounded-none flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center text-primary">
+            <div className="w-12 h-12 bg-indigo-50 rounded-none flex items-center justify-center text-primary">
               <Target size={24} />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Current Focus</p>
-              <h3 className="text-xl font-bold text-slate-800">Redesign Dashboard Components</h3>
+              <p className="text-[10px] font-black uppercase tracking-widest text-text-muted">Current Focus</p>
+              <h3 className="text-xl font-bold text-text-primary">Redesign Dashboard Components</h3>
             </div>
           </div>
-          <button className="flex items-center gap-2 px-6 py-2 bg-slate-100 rounded-2xl text-slate-600 font-bold text-sm hover:bg-slate-200 transition-all">
+          <button className="flex items-center gap-2 px-6 py-2 bg-surface-dim rounded-none text-text-muted font-bold text-sm hover:bg-surface-dim transition-all">
             Switch Task <ChevronDown size={18} />
           </button>
         </div>
 
         {/* The Timer */}
-        <div className="glass-card flex-1 rounded-[3rem] p-12 flex flex-col items-center justify-center relative overflow-hidden">
-          <div className="absolute -top-32 -right-32 w-96 h-96 bg-primary/5 rounded-full blur-[100px]" />
-          <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-secondary/5 rounded-full blur-[100px]" />
+        <div className="glass-card flex-1 rounded-none p-12 flex flex-col items-center justify-center relative overflow-hidden">
+          <div className="absolute -top-32 -right-32 w-96 h-96 bg-primary/5 rounded-none blur-[100px]" />
+          <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-secondary/5 rounded-none blur-[100px]" />
 
-          <div className="bg-slate-100 p-1.5 rounded-3xl flex gap-2 mb-16 relative z-10">
+          <div className="bg-surface-dim p-1.5 rounded-none flex gap-2 mb-16 relative z-10">
             {[
               { id: 'classic', label: '25/5 Classic' },
               { id: 'extended', label: '45/15 Extended' },
@@ -66,8 +102,8 @@ export function FocusTimer() {
                   setIsActive(false);
                 }}
                 className={cn(
-                  "px-6 py-2.5 rounded-2xl font-bold text-sm transition-all",
-                  mode === m.id ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600"
+                  "px-6 py-2.5 rounded-none font-bold text-sm transition-all",
+                  mode === m.id ? "bg-surface-bright text-primary shadow-sm" : "text-text-muted hover:text-text-muted"
                 )}
               >
                 {m.label}
@@ -84,7 +120,7 @@ export function FocusTimer() {
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="8"
-                className="text-slate-100"
+                className="text-surface-bright"
               />
               <circle
                 cx="160"
@@ -100,10 +136,10 @@ export function FocusTimer() {
               />
             </svg>
             <div className="text-center">
-              <span className="text-[100px] font-black text-slate-800 leading-none tracking-tighter tabular-nums drop-shadow-sm">
+              <span className="text-[100px] font-black text-text-primary leading-none tracking-tighter tabular-nums drop-shadow-sm">
                 {formatTime(timeLeft)}
               </span>
-              <p className="text-sm font-black uppercase tracking-[0.2em] text-slate-400 mt-4">Stay Focused</p>
+              <p className="text-sm font-black uppercase tracking-[0.2em] text-text-muted mt-4">Stay Focused</p>
             </div>
           </div>
 
@@ -113,26 +149,33 @@ export function FocusTimer() {
                 setTimeLeft(mode === 'classic' ? 25 * 60 : mode === 'extended' ? 45 * 60 : 60 * 60);
                 setIsActive(false);
               }}
-              className="w-14 h-14 rounded-full border border-slate-200 text-slate-400 hover:text-primary hover:border-primary transition-all flex items-center justify-center bg-white shadow-sm"
+              className="w-14 h-14 rounded-none border border-slate-200 text-text-muted hover:text-primary hover:border-primary transition-all flex items-center justify-center bg-surface-bright shadow-sm"
             >
               <RotateCcw size={24} />
             </button>
             <button 
-              onClick={() => setIsActive(!isActive)}
-              className="w-24 h-24 rounded-full bg-primary text-white flex items-center justify-center shadow-2xl shadow-primary/40 hover:scale-105 active:scale-95 transition-all"
+              onClick={() => isActive ? handleSessionEnd() : handleSessionStart()}
+              disabled={loading}
+              className="w-24 h-24 rounded-none bg-primary text-text-on-primary flex items-center justify-center shadow-2xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
             >
-              <Play size={48} className={cn(isActive && "fill-current")} />
+              {loading ? (
+                <Loader2 size={32} className="animate-spin" />
+              ) : isActive ? (
+                <Pause size={48} className="fill-current" />
+              ) : (
+                <Play size={48} />
+              )}
             </button>
-            <button className="w-14 h-14 rounded-full border border-slate-200 text-slate-400 hover:text-primary hover:border-primary transition-all flex items-center justify-center bg-white shadow-sm">
+            <button className="w-14 h-14 rounded-none border border-slate-200 text-text-muted hover:text-primary hover:border-primary transition-all flex items-center justify-center bg-surface-bright shadow-sm">
               <SkipForward size={24} />
             </button>
           </div>
 
           <div className="absolute bottom-8 right-8 flex gap-3">
-            <button className="p-3 bg-white/50 hover:bg-white rounded-2xl text-slate-400 hover:text-primary transition-all shadow-sm">
+            <button className="p-3 bg-white/50 hover:bg-surface-bright rounded-none text-text-muted hover:text-primary transition-all shadow-sm">
               <Maximize2 size={20} />
             </button>
-            <button className="p-3 bg-white/50 hover:bg-white rounded-2xl text-slate-400 hover:text-primary transition-all shadow-sm">
+            <button className="p-3 bg-white/50 hover:bg-surface-bright rounded-none text-text-muted hover:text-primary transition-all shadow-sm">
               <Sliders size={20} />
             </button>
           </div>
@@ -140,30 +183,30 @@ export function FocusTimer() {
       </div>
 
       <div className="col-span-12 lg:col-span-4 space-y-8">
-        <div className="glass-card p-8 rounded-[2rem]">
+        <div className="glass-card p-8 rounded-none">
           <div className="flex items-center justify-between mb-8">
-            <h4 className="text-xl font-bold text-slate-800">Productivity</h4>
-            <Activity size={20} className="text-slate-400" />
+            <h4 className="text-xl font-bold text-text-primary">Productivity</h4>
+            <Activity size={20} className="text-text-muted" />
           </div>
           <div className="grid grid-cols-2 gap-4 mb-8">
-            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Focus Time</p>
-              <span className="text-3xl font-black text-slate-800">4.5h</span>
+            <div className="bg-surface-dim p-5 rounded-none border border-slate-100">
+              <p className="text-[10px] font-black uppercase tracking-widest text-text-muted mb-1">Focus Time</p>
+              <span className="text-3xl font-black text-text-primary">4.5h</span>
             </div>
-            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Session Streak</p>
+            <div className="bg-surface-dim p-5 rounded-none border border-slate-100">
+              <p className="text-[10px] font-black uppercase tracking-widest text-text-muted mb-1">Session Streak</p>
               <span className="text-3xl font-black text-primary">8</span>
             </div>
           </div>
           <div className="space-y-4">
             <div className="flex justify-between text-xs font-bold">
-              <span className="text-slate-500">Daily Goal Progress</span>
-              <span className="text-slate-800">75%</span>
+              <span className="text-text-muted">Daily Goal Progress</span>
+              <span className="text-text-primary">75%</span>
             </div>
-            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
-              <div className="h-full bg-primary rounded-full transition-all duration-1000" style={{ width: '75%' }} />
+            <div className="w-full h-3 bg-surface-dim rounded-none overflow-hidden">
+              <div className="h-full bg-primary rounded-none transition-all duration-1000" style={{ width: '75%' }} />
             </div>
-            <p className="text-[10px] text-slate-400 font-medium">45 mins left to reach your daily 'Deep Work' target.</p>
+            <p className="text-[10px] text-text-muted font-medium">45 mins left to reach your daily 'Deep Work' target.</p>
           </div>
 
           <div className="mt-8 pt-8 border-t border-slate-100 h-24 flex items-end justify-between gap-1.5 px-1">
@@ -180,8 +223,8 @@ export function FocusTimer() {
           </div>
         </div>
 
-        <div className="glass-card p-8 rounded-[2rem]">
-          <h4 className="text-xl font-bold text-slate-800 mb-6">Focus Sounds</h4>
+        <div className="glass-card p-8 rounded-none">
+          <h4 className="text-xl font-bold text-text-primary mb-6">Focus Sounds</h4>
           <div className="space-y-4">
             {[
               { name: 'Rain Forest', icon: CloudRain, active: true, val: 65 },
@@ -189,40 +232,40 @@ export function FocusTimer() {
               { name: 'White Noise', icon: Wind, active: false },
             ].map((sound, i) => (
               <div key={i} className={cn(
-                "p-5 rounded-2xl border transition-all flex items-center justify-between group cursor-pointer",
-                sound.active ? "bg-white border-primary/20 shadow-sm" : "hover:bg-white border-transparent"
+                "p-5 rounded-none border transition-all flex items-center justify-between group cursor-pointer",
+                sound.active ? "bg-surface-bright border-primary/20 shadow-sm" : "hover:bg-surface-bright border-transparent"
               )}>
                 <div className="flex items-center gap-4">
-                  <sound.icon size={20} className={sound.active ? "text-primary" : "text-slate-400"} />
-                  <span className={cn("font-bold text-sm", sound.active ? "text-slate-800" : "text-slate-400")}>{sound.name}</span>
+                  <sound.icon size={20} className={sound.active ? "text-primary" : "text-text-muted"} />
+                  <span className={cn("font-bold text-sm", sound.active ? "text-text-primary" : "text-text-muted")}>{sound.name}</span>
                 </div>
                 {sound.active ? (
                   <div className="flex items-center gap-3">
-                    <div className="w-24 h-1.5 bg-slate-100 rounded-full">
-                      <div className="h-full bg-primary rounded-full" style={{ width: `${sound.val}%` }} />
+                    <div className="w-24 h-1.5 bg-surface-dim rounded-none">
+                      <div className="h-full bg-primary rounded-none" style={{ width: `${sound.val}%` }} />
                     </div>
                   </div>
                 ) : (
-                  <Play size={20} className="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Play size={20} className="text-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                 )}
               </div>
             ))}
           </div>
         </div>
 
-        <div className="glass-card p-8 rounded-[2rem] bg-indigo-50/50">
+        <div className="glass-card p-8 rounded-none bg-indigo-50/50">
           <div className="flex items-center gap-3 mb-6">
             <Flame className="text-orange-500 fill-orange-500" />
-            <h4 className="text-xl font-bold text-slate-800">Focus Master</h4>
+            <h4 className="text-xl font-bold text-text-primary">Focus Master</h4>
           </div>
           <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
             {[
-              { label: '7 Day Streak', icon: Flame, color: 'text-orange-500', bg: 'bg-white' },
-              { label: '100h Focus', icon: PenTool, color: 'text-primary', bg: 'bg-white' },
-              { label: 'Level 5', icon: Lock, color: 'text-slate-300', bg: 'bg-slate-100/50', dotted: true },
+              { label: '7 Day Streak', icon: Flame, color: 'text-orange-500', bg: 'bg-surface-bright' },
+              { label: '100h Focus', icon: PenTool, color: 'text-primary', bg: 'bg-surface-bright' },
+              { label: 'Level 5', icon: Lock, color: 'text-text-muted', bg: 'bg-surface-dim/50', dotted: true },
             ].map((ach, i) => (
               <div key={i} className={cn(
-                "min-w-[100px] aspect-square rounded-[2rem] flex flex-col items-center justify-center shadow-sm border",
+                "min-w-[100px] aspect-square rounded-none flex flex-col items-center justify-center shadow-sm border",
                 ach.bg, 
                 ach.dotted ? "border-dashed border-slate-300" : "border-slate-100"
               )}>

@@ -1,54 +1,119 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+/* Aspekta Font Face fallback if locally installed, or a similar geometric sans */
+@font-face {
+  font-family: 'Aspekta';
+  src: local('Aspekta'), local('Aspekta-Regular');
+  font-weight: 400;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Aspekta';
+  src: local('Aspekta-Bold'), local('Aspekta Bold');
+  font-weight: 700;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Aspekta';
+  src: local('Aspekta-Black'), local('Aspekta Black');
+  font-weight: 900;
+  font-style: normal;
+}
+
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Aspekta", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-heading: "Aspekta", ui-sans-serif, system-ui, -apple-system, sans-serif;
   
-  --color-primary: #4343d5;
-  --color-primary-hover: #3737b5;
-  --color-secondary: #4e45d5;
-  --color-tertiary: #904400;
+  /* Brand Guidelines - Calm Purple Theme */
+  --color-primary: #9D8DF1;
+  --color-primary-hover: #8B7CE0;
+  --color-accent: #B794F4;
+  --color-background: #13111C;
   
-  --color-surface: #f7f9fb;
-  --color-surface-dim: #d8dadc;
-  --color-surface-bright: #f7f9fb;
-  --color-surface-glass: rgba(255, 255, 255, 0.7);
+  --color-text-primary: #E2E2E2;
+  --color-text-on-primary: #13111C;
+  --color-text-muted: #9F9BAF;
   
-  --color-sidebar: #5d5fef;
-  --color-sidebar-dark: #4a4bd1;
+  --color-surface: #13111C;
+  --color-surface-dim: #1C1926;
+  --color-surface-bright: #252131;
+  --color-surface-glass: rgba(19, 17, 28, 0.7);
+  
+  --color-sidebar: #171520;
+  --color-sidebar-dark: #110F18;
+  
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-full: 0px; /* Sharp edges for high-energy modern vibe */
 }
 
 @layer base {
   body {
-    @apply bg-surface text-slate-900 font-sans antialiased;
+    @apply bg-background text-text-primary font-sans antialiased;
+  }
+  
+  h1 { @apply font-heading text-[76px] leading-tight font-black; }
+  h2 { @apply font-heading text-[14px] leading-snug font-bold tracking-widest uppercase text-primary; }
+  p, body { @apply text-[13px] leading-relaxed; }
+  
+  a { @apply text-primary hover:underline transition-colors; }
+
+  /* Mobile-first Font Scaling */
+  @media (max-width: 640px) {
+    h1 { @apply text-[42px]; }
+    p, body { @apply text-[12px]; }
   }
 }
 
 @layer components {
   .glass-card {
-    @apply bg-surface-glass backdrop-blur-xl border border-white/40 shadow-sm transition-all duration-300;
+    @apply bg-surface-dim border border-white/10 shadow-sm transition-all duration-300;
   }
   
   .sidebar-gradient {
     background: linear-gradient(180deg, var(--color-sidebar) 0%, var(--color-sidebar-dark) 100%);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
   }
 
   .nav-item {
-    @apply flex items-center gap-3 px-4 py-3 text-white/70 hover:text-white transition-all duration-200 rounded-xl hover:bg-white/10;
+    @apply flex items-center gap-3 px-4 py-3 text-text-muted hover:text-text-primary hover:bg-white/5 transition-all duration-200;
   }
 
   .nav-item-active {
-    @apply flex items-center gap-3 px-4 py-3 bg-white/20 text-white font-semibold rounded-xl;
+    @apply flex items-center gap-3 px-4 py-3 bg-primary text-text-on-primary font-black;
+  }
+  
+  .btn-primary {
+    @apply bg-primary text-text-on-primary font-bold px-6 py-3 hover:bg-primary-hover transition-colors;
+  }
+
+  .container-padding {
+    @apply px-4 sm:px-6 lg:px-8;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 4px; /* Base unit 4 from guidelines */
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--color-background);
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-200 rounded-full hover:bg-slate-300;
+  background: #333;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
 }

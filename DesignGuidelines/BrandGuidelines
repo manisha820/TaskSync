@@ -1,0 +1,28 @@
+Colors
+Primary:
+#BFF549
+Accent:
+#BFF549
+Background:
+#0D0D0D
+Text Primary:
+#0D0D0D
+Link:
+#BFF549
+Fonts
+Aspekta(unknown)
+Typography
+primary: Aspekta
+heading: Aspekta
+h1: 76px
+h2: 14px
+body: 13px
+Spacing
+Base Unit:
+4
+Border Radius:
+0px
+Personality
+Tone: modern
+Energy: high
+Audience: tech-savvy individuals looking for efficient dictation solutions
